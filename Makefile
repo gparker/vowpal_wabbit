@@ -1,25 +1,85 @@
-ARCH = -msse2 -mfpmath=sse -march=pentium-m
-FLAGS = -Wall $(ARCH) -O3 -ffast-math -D_FILE_OFFSET_BITS=64 -Wno-deprecated -I /usr/include/boost-1_34_1 
+default: vw
+all: vw library_example java spanning_tree python
 
-all:	vw install
+# CMake configs
+ensure_cmake:
+	mkdir -p build
+	cd build; cmake ..
 
-vw.o:	vw.cc parse_example.h parse_regressor.h parse_args.h
-	g++ $(FLAGS) -c $< -o $@
+ensure_cmake_gcov:
+	mkdir -p build
+	cd build; cmake .. -DGCOV=On
 
-parse_args.o:	parse_regressor.h parse_example.h io.h
+ensure_cmake_profile:
+	mkdir -p build
+	cd build; cmake .. -DPROFILE=On
 
-parse_example.o:	io.h stack.h parse_example.cc
+ensure_cmake_valgrind:
+	mkdir -p build
+	cd build; cmake .. -DVALGRIND_PROFILE=On
 
-io.o:	stack.h
+ensure_cmake_static:
+	mkdir -p build
+	cd build; cmake .. -DSTATIC_LINK_VW=On
 
-%.o:	%.cc %.h
-	g++ $(FLAGS) -c $< -o $@
+# Build targets
+spanning_tree_build:
+	cd build; make -j$(shell cat ./build/nprocs.txt) spanning_tree
 
-vw: hash.o io.o parse_regressor.o parse_example.o parse_args.o vw.o 
-	g++ $(FLAGS) -l boost_program_options -l pthread -o vw $+
+vw_build:
+	cd build; make -j$(shell cat ./build/nprocs.txt) vw-bin
 
-install:
-	cp vw ~/bin
+active_interactor_build:
+	cd build; make -j$(shell cat ./build/nprocs.txt) active_interactor
+
+library_example_build:
+	cd build; make -j$(shell cat ./build/nprocs.txt) ezexample_predict ezexample_predict_threaded ezexample_train library_example test_search search_generate recommend gd_mf_weights
+
+python_build:
+	cd build; make -j$(shell cat ./build/nprocs.txt) pylibvw
+
+java_build:
+	cd build; make -j$(shell cat ./build/nprocs.txt) vw_jni
+
+test_build:
+	@echo "vw running test-suite..."
+	cd build; make -j$(shell cat ./build/nprocs.txt) test_with_output
+
+unit_test_build:
+	cd build/test/unit_test; make -j$(shell cat ./build/nprocs.txt) vw-unit-test.out test
+
+bigtests_build:
+	cd build; make -j$(shell cat ./build/nprocs.txt) bigtests BIG_TEST_ARGS="$(MAKEFLAGS)"
+
+install_build:
+	cd build; make -j$(shell cat ./build/nprocs.txt) install
+
+doc_build:
+	cd build; make doc
+
+# These can be invoked with [gcov, valgrind, profile, static]
+spanning_tree_%: ensure_cmake_% spanning_tree_build ;
+vw_%: ensure_cmake_% vw_build ;
+active_interactor_%: ensure_cmake_% active_interactor_build ;
+library_example_%: ensure_cmake_% library_example_build ;
+python_%: ensure_cmake_% python_build ;
+java_%: ensure_cmake_% java_build ;
+test_%: ensure_cmake_% test_build ;
+unit_test_%: ensure_cmake_% unit_test_build ;
+bigtests_%: ensure_cmake_% bigtests_build ;
+install_%: ensure_cmake_% install_build ;
+
+# Normal build commands that use default configuration
+spanning_tree: ensure_cmake spanning_tree_build ;
+vw: ensure_cmake vw_build ;
+active_interactor: ensure_cmake active_interactor_build ;
+library_example: ensure_cmake library_example_build ;
+python: ensure_cmake python_build ;
+java: ensure_cmake java_build ;
+test: ensure_cmake test_build ;
+unit_test: ensure_cmake unit_test_build ;
+bigtests: ensure_cmake bigtests_build ;
+install: ensure_cmake install_build ;
 
 clean:
-	rm -f *.o vw *~
+	rm -rf build
